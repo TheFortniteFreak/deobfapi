@@ -1,0 +1,106 @@
+local ClipboardQueue = {}
+local SaveCounter = {}
+
+local function nextId()
+    return tostring(math.random(500, 33231))
+end
+
+local function cleanName(str)
+    return str:gsub("[:/]", "")
+end
+
+local function saveSource(name, source)
+    SaveCounter[name] = (SaveCounter[name] or 0) + 1
+    writefile(("%s%d.lua"):format(name, SaveCounter[name]), tostring(source))
+end
+
+local function queueClipboard(source)
+    table.insert(ClipboardQueue, tostring(source))
+end
+
+task.spawn(function()
+    while true do
+        if #ClipboardQueue > 0 then
+            local content = table.remove(ClipboardQueue, 1)
+            setclipboard(content)
+            task.wait(1.5)
+        else
+            task.wait(0.1)
+        end
+    end
+end)
+
+local function createHook(mode, identifier)
+    local env = {}
+
+    local function capture(...)
+        local args = {...}
+
+        for _, value in ipairs(args) do
+            if mode == "file" then
+                saveSource(identifier, value)
+            elseif mode == "copy" then
+                queueClipboard(value)
+            end
+        end
+    end
+
+    env.loadstring = function(...)
+        capture(...)
+        return loadstring(...)
+    end
+
+    env.load = function(...)
+        capture(...)
+        return load(...)
+    end
+
+    return setmetatable(env, {
+        __index = getfenv()
+    })
+end
+
+local function runSource(source, mode, identifier)
+    local fn = loadstring(source)
+    setfenv(fn, createHook(mode, identifier))
+    return fn()
+end
+
+local function fromUrl(url, mode)
+    local source = game:HttpGet(url)
+    local identifier = cleanName(url)
+
+    return runSource(source, mode, identifier)
+end
+
+local function fromString(source, mode)
+    local identifier = nextId()
+
+    if mode == "file" then
+        print("Saving sources under:", identifier)
+    end
+
+    return runSource(source, mode, identifier)
+end
+
+return API = {
+    url = {
+        copy = function(url)
+            return fromUrl(url, "copy")
+        end,
+
+        file = function(url)
+            return fromUrl(url, "file")
+        end
+    },
+
+    script = {
+        copy = function(source)
+            return fromString(source, "copy")
+        end,
+
+        file = function(source)
+            return fromString(source, "file")
+        end
+    }
+}
