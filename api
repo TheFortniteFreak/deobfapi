@@ -83,7 +83,7 @@ local function fromString(source, mode)
     return runSource(source, mode, identifier)
 end
 
-return API = {
+return {
     url = {
         copy = function(url)
             return fromUrl(url, "copy")
